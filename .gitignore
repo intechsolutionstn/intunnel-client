@@ -1,0 +1,39 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+InTunnel-*
+!*.go
+
+# Build output
+/output/
+/dist/
+/build/output/
+
+# Embedded binaries
+cmd/cli/frpc.gz
+cmd/gui/frpc.gz
+
+# Test binary
+*.test
+
+# Go coverage
+*.out
+
+# Dependency directories
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
