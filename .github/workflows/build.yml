@@ -1,0 +1,92 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+    
+    - name: Download FRP
+      run: |
+        FRP_VERSION="0.61.1"
+        mkdir -p frp-binaries
+        
+        for PLATFORM in linux_amd64 linux_arm64 darwin_amd64 darwin_arm64 windows_amd64; do
+          curl -sL "https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/frp_${FRP_VERSION}_${PLATFORM}.tar.gz" | tar xz
+          if [[ "$PLATFORM" == windows* ]]; then
+            mv frp_${FRP_VERSION}_${PLATFORM}/frpc.exe frp-binaries/frpc_${PLATFORM}.exe
+          else
+            mv frp_${FRP_VERSION}_${PLATFORM}/frpc frp-binaries/frpc_${PLATFORM}
+          fi
+          rm -rf frp_${FRP_VERSION}_${PLATFORM}
+        done
+    
+    - name: Build CLI Clients
+      run: |
+        mkdir -p output
+        
+        gzip -c frp-binaries/frpc_linux_amd64 > cmd/cli/frpc.gz
+        GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o output/InTunnel-Linux ./cmd/cli
+        
+        gzip -c frp-binaries/frpc_linux_arm64 > cmd/cli/frpc.gz
+        GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o output/InTunnel-Ubuntu ./cmd/cli
+        
+        gzip -c frp-binaries/frpc_darwin_amd64 > cmd/cli/frpc.gz
+        GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o output/InTunnel-macOS-Intel ./cmd/cli
+        
+        gzip -c frp-binaries/frpc_darwin_arm64 > cmd/cli/frpc.gz
+        GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o output/InTunnel-macOS-ARM ./cmd/cli
+        
+        gzip -c frp-binaries/frpc_windows_amd64.exe > cmd/cli/frpc.gz
+        GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o output/InTunnel-Windows.exe ./cmd/cli
+    
+    - name: Build GUI Clients
+      run: |
+        gzip -c frp-binaries/frpc_linux_amd64 > cmd/gui/frpc.gz
+        GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o output/InTunnel-GUI-Linux ./cmd/gui
+        
+        gzip -c frp-binaries/frpc_linux_arm64 > cmd/gui/frpc.gz
+        GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o output/InTunnel-GUI-Ubuntu ./cmd/gui
+        
+        gzip -c frp-binaries/frpc_darwin_amd64 > cmd/gui/frpc.gz
+        GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o output/InTunnel-GUI-macOS-Intel ./cmd/gui
+        
+        gzip -c frp-binaries/frpc_darwin_arm64 > cmd/gui/frpc.gz
+        GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o output/InTunnel-GUI-macOS-ARM ./cmd/gui
+        
+        gzip -c frp-binaries/frpc_windows_amd64.exe > cmd/gui/frpc.gz
+        GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -H=windowsgui" -o output/InTunnel-GUI-Windows.exe ./cmd/gui
+    
+    - name: Generate checksums
+      run: |
+        cd output
+        sha256sum * > checksums.txt
+        cat checksums.txt
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: intunnel-binaries
+        path: output/
+    
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          output/*
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
